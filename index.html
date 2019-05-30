@@ -1,0 +1,195 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>The HTML5 Herald</title>
+
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  <script src="https://code.jquery.com/jquery-3.4.1.js" integrity="sha256-WpOohJOqMqqyKL9FccASB9O0KwACQJpFTUBLTYOVvVU="   crossorigin="anonymous"></script>
+
+  <script>
+    $(document).ready(function(){
+
+      $("#success-message").hide();
+      $("#error-message").hide();
+
+      var token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJtZXJjaGFudCI6IjZkMzI5Nzk3LWI2NGQtNDdkMS1hNDU3LTQ3OThlMmIzNjFiNSIsImdvZFVzZXIiOmZhbHNlLCJzdWIiOiI0ODI3ODAzNi1jYzE5LTQ3YWItYTgyOC03MzRiOWUxYWNlMDIiLCJpc3MiOiJodHRwOi8vYXBpZGVtby5mYXR0bGFicy5jb20vdGVhbS9hcGlrZXkiLCJpYXQiOjE1NTU0Mjg2MzMsImV4cCI6NDcwOTAyODYzMywibmJmIjoxNTU1NDI4NjMzLCJqdGkiOiJxZTNueklKdWlDOFhKN1dhIiwiYXNzdW1pbmciOmZhbHNlfQ.TEmlwmgVBLwt5x0FO4c-mbY3JgO_tgxcFRfznlOGSrM"
+      var itemsArray = [];
+      var cartObj = {};
+      var total = 0;
+
+      function updateTotal(price){
+        total += price;
+        $("#total").html("Total: $" + total +".00");
+      }
+
+      function processCartObject(){
+        var lineItems = [];
+
+        for(obj in cartObj){
+          var lineItem = itemsArray[obj]
+
+          var invoiceItem = {
+            id : lineItem.id,
+            item : lineItem.item,
+            details: lineItem.details,
+            quantity: cartObj[obj],
+            price: lineItem.price
+          };
+
+          lineItems.push(invoiceItem)
+        }
+
+        return lineItems
+      }
+
+      $("#submit-invoice").click(function(){
+
+          var lineItems = processCartObject()
+
+          data = {
+            "url" : "www.testurl.com",
+            "memo" : $("#memo").val(),
+            "meta" : {
+              "lineitems" : lineItems
+            },
+            "total" : total
+        }
+
+          $.ajax({
+            type: "POST",
+            url: "https://apidemo.fattlabs.com/invoice",
+            contentType: "application/json",
+            accept: "application/json",
+            headers: {
+              'Authorization': 'Bearer' + token,
+            },
+            data: JSON.stringify(data),
+            success: function (data){
+              console.log("in success")
+              console.log(data)
+
+              $("#invoice-creation").hide();
+              $("#error-message").hide();
+              $("#success-message").show();
+            },
+            error: function(data){
+              console.log("in error")
+              $("#error-message").show();
+              console.log(data);
+            }
+          })
+      });
+
+      $.ajax({
+        url: "https://apidemo.fattlabs.com/item",
+        contentType: "application/json",
+        cacheControl: "no-cache",
+        headers: {
+          'Authorization': 'Bearer' + token,
+        },
+        method: 'GET',
+        success: function(items){
+
+          $.each(items.data, function(key, value){
+            // Build key value array of items to use for invoice table population...may not be necessary, will revisit.
+            itemsArray[value.code] = value
+
+            // populate table to display items
+            $("#items").append("<tr class=\"table-row\" id=" + value.code + "><td>" + value.item + "</td><td>" + value.details + "</td><td id=\"item-price\">$" + value.price + "</td><td>" + value.in_stock + "</td></tr>")
+          });
+
+          $(".table-row").click(function(row){
+            // Get full item object from itemsArray
+            var item = itemsArray[row.currentTarget.id]
+            var price = item.price
+
+            if(item.code in cartObj){
+              cartObj[item.code] += 1;
+              // I'm really sorry about this mess...
+              $("#invoice-line-items tr:contains(" + item.item + ")")[0].childNodes[2].innerHTML = cartObj[item.code]
+            }else{
+              cartObj[item.code] = 1;
+              $("#invoice-line-items").append("<tr class=\"invoice-item\" id=\"invoice-" + item.item + "\"><td>" + item.item + "</td><td>" + item.details + "</td><td>1</td><td id=\"item-price\">$" + price + "</td></tr>")
+            }
+
+            updateTotal(price)
+          })
+
+         }
+       });
+});
+
+  </script>
+</head>
+
+<body>
+
+<!-- Table to display items from API call  -->
+  <div class="container">
+    <h2>Items</h2>
+    <!-- <p>Click to add</p> -->
+    <table class="table table-hover" id="items" style="background-color: #00416b; color: white;">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Details</th>
+          <th>Price</th>
+          <th>Qty.</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+
+<br />
+<br />
+
+<!-- Form for creating invoice -->
+  <div class="container" id="invoice-creation">
+    <h2>Invoice</h2>
+    <!-- <p>Click to remove items</p> -->
+    <form action="">
+      <div class="form-group">
+        <label for="memo">Memo</label>
+        <input type="text" class="form-control" id="memo" placeholder="memo" name="memo">
+      </div>
+      <div class="form-group">
+        <label for="pwd">Line Items</label>
+        <label for="total" id="total">Total: $0.00</label>
+        <table class="table table-hover" id="invoice-line-items" style="background-color: #f36c21; color: white;">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Details</th>
+              <th>Qty</th>
+              <th>Price</th>
+            </tr>
+          </thead>
+          <tbody class="body">
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-success" id="submit-invoice">Submit</button>
+    </form>
+  </div>
+
+    <div class="container" id="success-message">
+      <br />
+      <button onClick="window.location.reload();" class="alert alert-success" role="alert">
+        Your invoice was successfully created. Click here to create another invoice.
+      </button>
+    </div>
+
+    <div class="container" id="error-message">
+      <br />
+      <button onClick="window.location.reload();" class="alert alert-danger" role="alert">
+        There was an error processing your invoice. You can try to re-submit or click here to start over.
+      </button>
+    </div>
+
+</body>
+</html>
